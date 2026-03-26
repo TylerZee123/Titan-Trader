@@ -302,12 +302,18 @@ class Notifier:
                 <td style="padding:5px 8px;font-size:11px;color:#64748b">{', '.join(data['tickers'])}</td>
             </tr>"""
 
+        position_reviews_label = "POSITION REVIEWS (Claude Decisions)"
+        reviews_html = (
+            '<div style="background:#0f1a2e;border-radius:8px;padding:16px;margin-bottom:16px">'
+            '<div style="font-size:10px;color:#64748b;letter-spacing:2px;margin-bottom:10px">' + position_reviews_label + '</div>'
+            '<table style="width:100%;border-collapse:collapse">' + review_rows + '</table></div>'
+        ) if review_rows else ''
+
         return f"""<html><body style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',monospace;background:#060d1a;color:#e2e8f0;padding:24px;max-width:780px;margin:0 auto">
 
-        <h1 style="color:#f59e0b;margin:0 0 4px;font-size:22px">⚡ TITAN TRADER — DAILY REPORT</h1>
-        <p style="color:#475569;margin:0 0 20px;font-size:13px">{datetime.now().strftime('%A, %B %d, %Y — %I:%M %p ET')}</p>
+        <h1 style="color:#f59e0b;margin:0 0 4px;font-size:22px">TITAN TRADER - DAILY REPORT</h1>
+        <p style="color:#475569;margin:0 0 20px;font-size:13px">{datetime.now().strftime('%A, %B %d, %Y - %I:%M %p ET')}</p>
 
-        <!-- Portfolio summary -->
         <div style="background:#0f1a2e;border-radius:8px;padding:16px;margin-bottom:16px;display:flex;flex-wrap:wrap;gap:24px">
             <div><div style="font-size:10px;color:#64748b;letter-spacing:1px">PORTFOLIO</div><div style="font-size:24px;font-weight:bold">${float(account.get('portfolio_value',0)):,.2f}</div></div>
             <div><div style="font-size:10px;color:#64748b;letter-spacing:1px">TODAY P&L</div><div style="font-size:24px;font-weight:bold;color:{pnl_color}">${pnl:+,.2f}</div></div>
@@ -317,29 +323,25 @@ class Notifier:
             <div><div style="font-size:10px;color:#64748b;letter-spacing:1px">RISK MULT</div><div style="font-size:18px;color:{'#22c55e' if risk_mult >= 1 else '#fbbf24'}">{risk_mult:.0%}</div></div>
         </div>
 
-        <!-- Market context -->
         <div style="background:#0f1a2e;border-radius:8px;padding:16px;margin-bottom:16px;border-left:3px solid {regime_color}">
             <div style="font-size:10px;color:#64748b;letter-spacing:2px;margin-bottom:8px">TODAY'S MARKET CONTEXT</div>
             <p style="color:#94a3b8;font-size:13px;line-height:1.7;margin:0">
-                Regime: <strong style="color:{regime_color}">{regime}</strong> &nbsp;|&nbsp;
-                Risk env: <strong>{market.get('risk_env','?')}</strong> &nbsp;|&nbsp;
-                Stocks scored: <strong>{report.get('all_scored',0)}</strong> &nbsp;|&nbsp;
+                Regime: <strong style="color:{regime_color}">{regime}</strong> |
+                Risk env: <strong>{market.get('risk_env','?')}</strong> |
+                Stocks scored: <strong>{report.get('all_scored',0)}</strong> |
                 Dynamic candidates: <strong>{report.get('dynamic_adds',0)}</strong><br>
                 Position sizes adjusted to <strong style="color:#fbbf24">{risk_mult:.0%}</strong> of normal due to current market conditions.
             </p>
         </div>
 
-        <!-- Trades -->
         <div style="background:#0f1a2e;border-radius:8px;padding:16px;margin-bottom:16px">
             <div style="font-size:10px;color:#64748b;letter-spacing:2px;margin-bottom:10px">TRADES EXECUTED TODAY</div>
             {'<table style="width:100%;border-collapse:collapse">' + buy_rows + sell_rows + '</table>' if buy_rows or sell_rows else ''}
             {no_trade_reason}
         </div>
 
-        <!-- Position reviews -->
-        {'<div style="background:#0f1a2e;border-radius:8px;padding:16px;margin-bottom:16px"><div style="font-size:10px;color:#64748b;letter-spacing:2px;margin-bottom:10px">POSITION REVIEWS (Claude\'s Decisions)</div><table style="width:100%;border-collapse:collapse">' + review_rows + '</table></div>' if review_rows else ''}
+        {reviews_html}
 
-        <!-- Top 10 stocks -->
         <div style="background:#0f1a2e;border-radius:8px;padding:16px;margin-bottom:16px">
             <div style="font-size:10px;color:#64748b;letter-spacing:2px;margin-bottom:10px">TOP 10 SCORED STOCKS TODAY</div>
             <table style="width:100%;border-collapse:collapse">
@@ -356,7 +358,7 @@ class Notifier:
 
         {'<div style="background:#0f1a2e;border-radius:8px;padding:16px;margin-bottom:16px"><div style="font-size:10px;color:#64748b;letter-spacing:2px;margin-bottom:10px">SECTOR BREAKDOWN</div><table style="width:100%;border-collapse:collapse">' + sector_rows + '</table></div>' if sector_rows else ''}
 
-        <p style="color:#1e293b;font-size:11px;text-align:center;margin-top:24px">Titan Trader — AI-powered portfolio management</p>
+        <p style="color:#1e293b;font-size:11px;text-align:center;margin-top:24px">Titan Trader - AI-powered portfolio management</p>
         </body></html>"""
 
     def _build_post_market_html(self, account: Dict, news: Dict, lessons: Dict, perf: Dict) -> str:
