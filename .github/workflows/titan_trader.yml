@@ -1,0 +1,169 @@
+name: Titan Trader — Final
+
+on:
+  schedule:
+    - cron: "0 13 * * 1-5"    # 8:00 AM ET — pre-market
+    - cron: "35 14 * * 1-5"   # 9:35 AM ET — trading session
+    - cron: "0 22 * * 1-5"    # 5:00 PM ET — post-market
+  workflow_dispatch:
+    inputs:
+      run_mode:
+        description: "Run mode"
+        required: true
+        default: "trade"
+        type: choice
+        options: [pre_market, trade, post_market]
+      trade_mode:
+        description: "Execute real trades?"
+        required: true
+        default: "analyze"
+        type: choice
+        options: [analyze, trade]
+
+jobs:
+
+  pre-market:
+    name: "🌅 Pre-Market Scan"
+    runs-on: ubuntu-latest
+    if: |
+      (github.event_name == 'schedule' && github.event.schedule == '0 13 * * 1-5') ||
+      (github.event_name == 'workflow_dispatch' && github.event.inputs.run_mode == 'pre_market')
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: "3.11" }
+      - uses: actions/cache@v4
+        with:
+          path: ~/.cache/pip
+          key: ${{ runner.os }}-pip-${{ hashFiles('requirements.txt') }}
+      - run: pip install -r requirements.txt
+      - name: Pre-Market Scan
+        env:
+          RUN_MODE:                     pre_market
+          ALPACA_API_KEY:               ${{ secrets.ALPACA_API_KEY }}
+          ALPACA_SECRET_KEY:            ${{ secrets.ALPACA_SECRET_KEY }}
+          ALPACA_PAPER:                 "true"
+          ANTHROPIC_API_KEY:            ${{ secrets.ANTHROPIC_API_KEY }}
+          SUPABASE_URL:                 ${{ secrets.SUPABASE_URL }}
+          SUPABASE_KEY:                 ${{ secrets.SUPABASE_KEY }}
+          TWILIO_ACCOUNT_SID:           ${{ secrets.TWILIO_ACCOUNT_SID }}
+          TWILIO_AUTH_TOKEN:            ${{ secrets.TWILIO_AUTH_TOKEN }}
+          TWILIO_FROM_NUMBER:           ${{ secrets.TWILIO_FROM_NUMBER }}
+          NOTIFICATION_PHONE:           "+15167840478"
+          NOTIFICATION_EMAIL:           "tylerzar24@gmail.com"
+          SMTP_USER:                    ${{ secrets.SMTP_USER }}
+          SMTP_PASS:                    ${{ secrets.SMTP_PASS }}
+        run: python main.py
+      - uses: actions/upload-artifact@v4
+        with:
+          name: pre-market-data
+          path: /tmp/pre_market_news.json
+          retention-days: 1
+
+  trading-session:
+    name: "⚡ Trading Session"
+    runs-on: ubuntu-latest
+    needs: [pre-market]
+    if: |
+      always() &&
+      ((github.event_name == 'schedule' && github.event.schedule == '35 14 * * 1-5') ||
+       (github.event_name == 'workflow_dispatch' && github.event.inputs.run_mode == 'trade'))
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: "3.11" }
+      - uses: actions/cache@v4
+        with:
+          path: ~/.cache/pip
+          key: ${{ runner.os }}-pip-${{ hashFiles('requirements.txt') }}
+      - run: pip install -r requirements.txt
+      - uses: actions/download-artifact@v4
+        with: { name: pre-market-data, path: /tmp/ }
+        continue-on-error: true
+      - uses: actions/download-artifact@v4
+        with: { name: lessons-data, path: learning/ }
+        continue-on-error: true
+      - name: Trading Session
+        env:
+          RUN_MODE:                     trade
+          TRADE_MODE:                   ${{ github.event.inputs.trade_mode || 'analyze' }}
+          ALPACA_API_KEY:               ${{ secrets.ALPACA_API_KEY }}
+          ALPACA_SECRET_KEY:            ${{ secrets.ALPACA_SECRET_KEY }}
+          ALPACA_PAPER:                 "true"
+          ANTHROPIC_API_KEY:            ${{ secrets.ANTHROPIC_API_KEY }}
+          SUPABASE_URL:                 ${{ secrets.SUPABASE_URL }}
+          SUPABASE_KEY:                 ${{ secrets.SUPABASE_KEY }}
+          GOOGLE_SHEETS_ID:             ${{ secrets.GOOGLE_SHEETS_ID }}
+          GOOGLE_SERVICE_ACCOUNT_JSON:  ${{ secrets.GOOGLE_SERVICE_ACCOUNT_JSON }}
+          TWILIO_ACCOUNT_SID:           ${{ secrets.TWILIO_ACCOUNT_SID }}
+          TWILIO_AUTH_TOKEN:            ${{ secrets.TWILIO_AUTH_TOKEN }}
+          TWILIO_FROM_NUMBER:           ${{ secrets.TWILIO_FROM_NUMBER }}
+          NOTIFICATION_PHONE:           "+15167840478"
+          NOTIFICATION_EMAIL:           "tylerzar24@gmail.com"
+          SMTP_USER:                    ${{ secrets.SMTP_USER }}
+          SMTP_PASS:                    ${{ secrets.SMTP_PASS }}
+          MAX_PORTFOLIO_SIZE:           "12"
+          MAX_POSITION_PCT:             "0.15"
+          DAILY_LOSS_LIMIT:             "0.03"
+          CASH_RESERVE_PCT:             "0.20"
+        run: python main.py
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: lessons-data
+          path: |
+            learning/lessons.json
+            learning/weight_adjustments.json
+          retention-days: 90
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: session-${{ github.run_id }}
+          path: /tmp/trading_session.json
+          retention-days: 30
+
+  post-market:
+    name: "🌆 Post-Market Review"
+    runs-on: ubuntu-latest
+    if: |
+      (github.event_name == 'schedule' && github.event.schedule == '0 22 * * 1-5') ||
+      (github.event_name == 'workflow_dispatch' && github.event.inputs.run_mode == 'post_market')
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: "3.11" }
+      - uses: actions/cache@v4
+        with:
+          path: ~/.cache/pip
+          key: ${{ runner.os }}-pip-${{ hashFiles('requirements.txt') }}
+      - run: pip install -r requirements.txt
+      - uses: actions/download-artifact@v4
+        with: { name: lessons-data, path: learning/ }
+        continue-on-error: true
+      - name: Post-Market Review
+        env:
+          RUN_MODE:                     post_market
+          ALPACA_API_KEY:               ${{ secrets.ALPACA_API_KEY }}
+          ALPACA_SECRET_KEY:            ${{ secrets.ALPACA_SECRET_KEY }}
+          ALPACA_PAPER:                 "true"
+          ANTHROPIC_API_KEY:            ${{ secrets.ANTHROPIC_API_KEY }}
+          SUPABASE_URL:                 ${{ secrets.SUPABASE_URL }}
+          SUPABASE_KEY:                 ${{ secrets.SUPABASE_KEY }}
+          GOOGLE_SHEETS_ID:             ${{ secrets.GOOGLE_SHEETS_ID }}
+          GOOGLE_SERVICE_ACCOUNT_JSON:  ${{ secrets.GOOGLE_SERVICE_ACCOUNT_JSON }}
+          TWILIO_ACCOUNT_SID:           ${{ secrets.TWILIO_ACCOUNT_SID }}
+          TWILIO_AUTH_TOKEN:            ${{ secrets.TWILIO_AUTH_TOKEN }}
+          TWILIO_FROM_NUMBER:           ${{ secrets.TWILIO_FROM_NUMBER }}
+          NOTIFICATION_PHONE:           "+15167840478"
+          NOTIFICATION_EMAIL:           "tylerzar24@gmail.com"
+          SMTP_USER:                    ${{ secrets.SMTP_USER }}
+          SMTP_PASS:                    ${{ secrets.SMTP_PASS }}
+        run: python main.py
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: lessons-data
+          path: |
+            learning/lessons.json
+            learning/weight_adjustments.json
+          retention-days: 90
