@@ -46,33 +46,18 @@ class Notifier:
     # ── SMS ────────────────────────────────────────────────────────────────
 
     def sms(self, message: str):
-        """Send SMS via Twilio."""
-        if not all([self.twilio_sid, self.twilio_token, self.twilio_from]):
-            logger.info(f"SMS (not configured): {message}")
-            return
-        try:
-            from twilio.rest import Client
-            client = Client(self.twilio_sid, self.twilio_token)
-            client.messages.create(
-                body=message,
-                from_=self.twilio_from,
-                to=self.to_phone,
-            )
-            logger.info(f"SMS sent to {self.to_phone}")
-        except Exception as e:
-            logger.error(f"SMS failed: {e}")
+        """Route all alerts to email instead of SMS."""
+        subject = message.split("\n")[0][:80]
+        body    = f"<html><body style='font-family:monospace;background:#060d1a;color:#e2e8f0;padding:24px'><pre style='color:#e2e8f0'>{message}</pre></body></html>"
+        self._send_email(f"⚡ Titan Alert — {subject}", body)
 
     def send_morning_sms(self, report: Dict):
-        """
-        Daily morning SMS — concise briefing before market opens.
-        Sent at 8:00 AM after pre-market scan completes.
-        """
-        ms      = report.get("market_sentiment", {})
-        buys    = report.get("strong_buy_signals", [])
-        sells   = report.get("sell_signals", [])
-        reviews = report.get("immediate_reviews", [])
-        bias    = ms.get("trading_bias", "NEUTRAL")
-        sent    = ms.get("sentiment_label", "NEUTRAL")
+        """Morning brief — sent as email."""
+        ms   = report.get("market_sentiment", {})
+        buys = report.get("strong_buy_signals", [])
+        sells= report.get("sell_signals", [])
+        bias = ms.get("trading_bias", "NEUTRAL")
+        sent = ms.get("sentiment_label", "NEUTRAL")
 
         emoji_map = {
             "VERY_BULLISH": "🚀", "BULLISH": "📈",
@@ -88,57 +73,58 @@ class Notifier:
             lines.append(f"📈 Watching: {', '.join(buys[:4])}")
         if sells:
             lines.append(f"🚨 Exit signals: {', '.join(sells[:3])}")
-        if reviews:
-            lines.append(f"⚠️ Review: {', '.join(reviews[:2])}")
-        lines.append("Full report in your email.")
+        lines.append("Full report coming at 9:35 AM.")
 
-        self.sms("\n".join(lines))
+        subject = f"🌅 Titan Pre-Market — {datetime.now().strftime('%b %d')} | {sent}"
+        body    = f"<html><body style='font-family:monospace;background:#060d1a;color:#e2e8f0;padding:24px'><pre style='color:#e2e8f0'>{chr(10).join(lines)}</pre></body></html>"
+        self._send_email(subject, body)
 
     def send_trade_sms(self, trade_plan: Dict, account: Dict):
-        """
-        SMS sent immediately after trades execute.
-        Tells you exactly what was bought/sold and at what size.
-        """
-        buys  = trade_plan.get("buys", [])
-        sells = trade_plan.get("sells", [])
-        pv    = float(account.get("portfolio_value", 0))
+        """Trade confirmation — sent as email."""
+        buys = trade_plan.get("buys", [])
+        sells= trade_plan.get("sells", [])
+        pv   = float(account.get("portfolio_value", 0))
 
         lines = [f"⚡ TITAN TRADED — {datetime.now().strftime('%H:%M ET')}"]
-
         for b in buys[:4]:
+            tp = b.get('take_profit_pct') or 0
             lines.append(
                 f"✅ BUY {b['ticker']} ${b['dollars']:,.0f} "
-                f"({b['pct']:.1f}%) | SL:-{b['stop_loss_pct']*100:.0f}% TP:+{b['take_profit_pct']*100:.0f}%"
+                f"| SL:-{b['stop_loss_pct']*100:.0f}% TP:+{tp*100:.0f}%"
             )
         for s in sells[:3]:
-            lines.append(f"🔴 SELL {s['ticker']} — {s.get('reason','')[:40]}")
-
+            lines.append(f"🔴 SELL {s['ticker']} — {s.get('reason','')[:60]}")
         if not buys and not sells:
             lines.append("No trades today — no qualifying signals.")
-
         lines.append(f"Portfolio: ${pv:,.0f}")
-        self.sms("\n".join(lines))
+
+        subject = f"⚡ Titan Trades — {datetime.now().strftime('%b %d %H:%M')} | {len(buys)} buys {len(sells)} sells"
+        body    = f"<html><body style='font-family:monospace;background:#060d1a;color:#e2e8f0;padding:24px'><pre style='color:#e2e8f0'>{chr(10).join(lines)}</pre></body></html>"
+        self._send_email(subject, body)
 
     def send_alert_sms(self, message: str):
-        """Urgent alert — stop loss triggered, circuit breaker, error."""
+        """Urgent alert — sent as email."""
         self.sms(f"🚨 TITAN ALERT\n{message}")
 
     def send_post_market_sms(self, account: Dict, lessons_count: int):
-        """End of day SMS summary."""
+        """End of day summary — sent as email."""
         pnl     = float(account.get("pnl_today", 0))
         pnl_pct = float(account.get("pnl_today_pct", 0))
         pv      = float(account.get("portfolio_value", 0))
         emoji   = "📈" if pnl >= 0 else "📉"
 
-        msg = (
-            f"{emoji} TITAN EOD — {datetime.now().strftime('%b %d')}\n"
-            f"P&L: ${pnl:+,.2f} ({pnl_pct:+.2f}%)\n"
-            f"Portfolio: ${pv:,.2f}\n"
-        )
+        lines = [
+            f"{emoji} TITAN EOD — {datetime.now().strftime('%b %d')}",
+            f"P&L: ${pnl:+,.2f} ({pnl_pct:+.2f}%)",
+            f"Portfolio: ${pv:,.2f}",
+        ]
         if lessons_count > 0:
-            msg += f"📚 {lessons_count} loss lesson(s) recorded.\n"
-        msg += "Full report in your email."
-        self.sms(msg)
+            lines.append(f"📚 {lessons_count} loss lesson(s) recorded.")
+        lines.append("Full post-market report coming shortly.")
+
+        subject = f"{emoji} Titan EOD — {datetime.now().strftime('%b %d')} | ${pnl:+,.2f}"
+        body    = f"<html><body style='font-family:monospace;background:#060d1a;color:#e2e8f0;padding:24px'><pre style='color:#e2e8f0'>{chr(10).join(lines)}</pre></body></html>"
+        self._send_email(subject, body)
 
     # ── Email ──────────────────────────────────────────────────────────────
 
