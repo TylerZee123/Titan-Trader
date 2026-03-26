@@ -210,60 +210,153 @@ class Notifier:
         allocation = plan.get("allocation", {})
         top_stocks = report.get("top_10_stocks", [])
         market     = report.get("market_context", {})
+        reviews    = report.get("position_reviews", {})
         pnl        = float(account.get("pnl_today", 0))
         pnl_color  = "#22c55e" if pnl >= 0 else "#ef4444"
-
+        regime     = market.get("regime", "?")
+        regime_color = "#22c55e" if regime == "BULL" else "#ef4444" if regime == "BEAR" else "#fbbf24"
+        risk_mult  = plan.get("risk_multiplier", 1.0)
         sig_colors = {"STRONG_BUY":"#22c55e","BUY":"#86efac","HOLD":"#fbbf24","WATCH":"#f97316","AVOID":"#ef4444"}
 
+        # ── Trade rows ────────────────────────────────────────────────────
         buy_rows = ""
         for b in plan.get("buys", []):
-            buy_rows += f"""<tr>
+            tp = b.get('take_profit_pct') or 0
+            buy_rows += f"""<tr style="border-bottom:1px solid #1e293b">
                 <td style="padding:8px;color:#22c55e;font-weight:bold">BUY</td>
                 <td style="padding:8px;font-weight:bold">{b['ticker']}</td>
-                <td style="padding:8px">${b['dollars']:,.0f} ({b.get('pct',0):.1f}%)</td>
-                <td style="padding:8px;font-size:11px">{b.get('tier','?')} | SL:-{b['stop_loss_pct']*100:.0f}% TP:+{b['take_profit_pct']*100:.0f}%</td>
-                <td style="padding:8px;font-size:11px;color:#64748b">{b.get('reasoning','')[:60]}...</td>
+                <td style="padding:8px">${b['dollars']:,.0f}</td>
+                <td style="padding:8px;font-size:11px;color:#fbbf24">{b.get('tier','?')} | {b.get('bucket','?')}</td>
+                <td style="padding:8px;font-size:11px">SL:-{b['stop_loss_pct']*100:.0f}% {'TP:+'+str(round(tp*100))+'%' if tp else 'TRAIL:15%'}</td>
+                <td style="padding:8px;font-size:11px;color:#64748b">{b.get('reasoning','')[:80]}</td>
             </tr>"""
 
         sell_rows = ""
         for s in plan.get("sells", []):
-            sell_rows += f"""<tr>
-                <td style="padding:8px;color:#ef4444;font-weight:bold">SELL</td>
+            sell_rows += f"""<tr style="border-bottom:1px solid #1e293b">
+                <td style="padding:8px;color:#ef4444;font-weight:bold">{'TRIM' if s.get('is_trim') else 'SELL'}</td>
                 <td style="padding:8px;font-weight:bold">{s['ticker']}</td>
-                <td colspan="3" style="padding:8px;color:#64748b;font-size:12px">{s.get('reason','')}</td>
+                <td colspan="4" style="padding:8px;color:#94a3b8;font-size:12px">{s.get('reason','')}</td>
             </tr>"""
 
+        no_trade_reason = ""
+        if not buy_rows and not sell_rows:
+            holds = plan.get("holds", [])
+            regime_note = f"Market regime: {regime} (risk multiplier: {risk_mult:.0%}) — position sizes reduced" if risk_mult < 1.0 else ""
+            scored_count = report.get("all_scored", 0)
+            min_score = 60
+            qualifying = [s for s in top_stocks if s.get("total_score", 0) >= min_score and s.get("signal") in ("BUY","STRONG_BUY")]
+            no_trade_reason = f"""
+            <p style="color:#94a3b8;font-size:13px;margin:0 0 6px">
+                <strong style="color:#fbbf24">Why no trades?</strong> Scored {scored_count} stocks today.
+                {len(qualifying)} met the minimum score threshold of {min_score}/100.
+                {f"However, {regime_note}." if regime_note else ""}
+                {f"All {len(qualifying)} qualifying stocks were either already held, blocked by earnings, or below minimum dollar size after risk adjustment." if qualifying else "No stocks scored above the 60/100 minimum threshold today."}
+            </p>"""
+
+        # ── Top 10 scored stocks ──────────────────────────────────────────
         stock_rows = ""
         for s in top_stocks[:10]:
             color = sig_colors.get(s.get("signal","HOLD"), "#fff")
-            stock_rows += f"""<tr style="border-bottom:1px solid #1e293b">
-                <td style="padding:6px 10px;font-weight:bold">{s.get('ticker')}</td>
-                <td style="padding:6px 10px;color:#f59e0b">{s.get('total_score',0):.1f}</td>
-                <td style="padding:6px 10px;color:{color};font-size:11px;font-weight:bold">{s.get('signal','?')}</td>
-                <td style="padding:6px 10px;font-size:11px;color:#64748b">{s.get('ai_reasoning','')[:70]}...</td>
+            proj  = s.get("projected_return")
+            proj_str = f"+{proj:.0f}%" if proj and proj > 0 else (f"{proj:.0f}%" if proj else "—")
+            proj_color = "#22c55e" if proj and proj > 0 else "#ef4444" if proj and proj < 0 else "#64748b"
+            risks = ", ".join(s.get("ai_risks", [])[:2]) or "—"
+            cats  = ", ".join(s.get("ai_catalysts", [])[:2]) or "—"
+            stock_rows += f"""
+            <tr style="border-bottom:1px solid #1e293b">
+                <td style="padding:8px 6px;font-weight:bold;font-size:13px">{s.get('ticker')}</td>
+                <td style="padding:8px 6px;color:#f59e0b;font-weight:bold">{s.get('total_score',0):.1f}</td>
+                <td style="padding:8px 6px;color:{color};font-size:11px;font-weight:bold">{s.get('signal','?')}</td>
+                <td style="padding:8px 6px;color:{proj_color};font-size:12px">{proj_str}</td>
+                <td style="padding:8px 6px;font-size:11px;color:#94a3b8">{s.get('ai_reasoning','')[:80]}</td>
+            </tr>
+            <tr style="border-bottom:2px solid #0f1a2e;background:#070e1c">
+                <td colspan="2" style="padding:2px 6px 8px;font-size:10px;color:#475569">
+                    {s.get('bucket','?')} | {s.get('strategy','?')} | conf:{s.get('data_confidence','?')}
+                </td>
+                <td colspan="3" style="padding:2px 6px 8px;font-size:10px;color:#475569">
+                    ✅ {cats[:60]} &nbsp;&nbsp; ⚠️ {risks[:60]}
+                </td>
             </tr>"""
 
-        return f"""<html><body style="font-family:monospace;background:#060d1a;color:#e2e8f0;padding:24px;max-width:700px">
-        <h1 style="color:#f59e0b;margin:0 0 4px">⚡ TITAN TRADER — DAILY REPORT</h1>
-        <p style="color:#475569;margin:0 0 20px">{datetime.now().strftime('%A, %B %d, %Y')}</p>
+        # ── Position reviews ──────────────────────────────────────────────
+        review_rows = ""
+        for ticker, rv in reviews.items():
+            dec = rv.get("decision","HOLD")
+            dec_color = "#22c55e" if dec == "HOLD" else "#fbbf24" if dec == "TRIM" else "#ef4444"
+            trim_str = f" {rv['trim_pct']*100:.0f}%" if rv.get("trim_pct") else ""
+            review_rows += f"""<tr style="border-bottom:1px solid #1e293b">
+                <td style="padding:8px;font-weight:bold">{ticker}</td>
+                <td style="padding:8px;color:{dec_color};font-weight:bold">{dec}{trim_str}</td>
+                <td style="padding:8px;font-size:12px;color:#94a3b8">{rv.get('reasoning','')[:100]}</td>
+            </tr>"""
 
-        <div style="background:#0f1a2e;border-radius:8px;padding:16px;margin-bottom:16px;display:flex;gap:32px">
-            <div><div style="font-size:11px;color:#64748b">PORTFOLIO</div><div style="font-size:22px;font-weight:bold">${float(account.get('portfolio_value',0)):,.2f}</div></div>
-            <div><div style="font-size:11px;color:#64748b">TODAY P&L</div><div style="font-size:22px;font-weight:bold;color:{pnl_color}">${pnl:+,.2f}</div></div>
-            <div><div style="font-size:11px;color:#64748b">CASH</div><div style="font-size:22px">${float(account.get('cash',0)):,.2f}</div></div>
-            <div><div style="font-size:11px;color:#64748b">REGIME</div><div style="font-size:16px;font-weight:bold;color:#f59e0b">{market.get('regime','?')}</div></div>
+        # ── Sector breakdown ──────────────────────────────────────────────
+        sector_rows = ""
+        for sector, data in allocation.get("sector_breakdown", {}).items():
+            sector_rows += f"""<tr style="border-bottom:1px solid #1e293b">
+                <td style="padding:5px 8px;font-size:12px">{sector}</td>
+                <td style="padding:5px 8px;font-size:12px;color:#fbbf24">{data['count']} positions</td>
+                <td style="padding:5px 8px;font-size:12px">${data['dollars']:,.0f}</td>
+                <td style="padding:5px 8px;font-size:11px;color:#64748b">{', '.join(data['tickers'])}</td>
+            </tr>"""
+
+        return f"""<html><body style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',monospace;background:#060d1a;color:#e2e8f0;padding:24px;max-width:780px;margin:0 auto">
+
+        <h1 style="color:#f59e0b;margin:0 0 4px;font-size:22px">⚡ TITAN TRADER — DAILY REPORT</h1>
+        <p style="color:#475569;margin:0 0 20px;font-size:13px">{datetime.now().strftime('%A, %B %d, %Y — %I:%M %p ET')}</p>
+
+        <!-- Portfolio summary -->
+        <div style="background:#0f1a2e;border-radius:8px;padding:16px;margin-bottom:16px;display:flex;flex-wrap:wrap;gap:24px">
+            <div><div style="font-size:10px;color:#64748b;letter-spacing:1px">PORTFOLIO</div><div style="font-size:24px;font-weight:bold">${float(account.get('portfolio_value',0)):,.2f}</div></div>
+            <div><div style="font-size:10px;color:#64748b;letter-spacing:1px">TODAY P&L</div><div style="font-size:24px;font-weight:bold;color:{pnl_color}">${pnl:+,.2f}</div></div>
+            <div><div style="font-size:10px;color:#64748b;letter-spacing:1px">CASH</div><div style="font-size:24px">${float(account.get('cash',0)):,.2f}</div></div>
+            <div><div style="font-size:10px;color:#64748b;letter-spacing:1px">REGIME</div><div style="font-size:18px;font-weight:bold;color:{regime_color}">{regime}</div></div>
+            <div><div style="font-size:10px;color:#64748b;letter-spacing:1px">VIX</div><div style="font-size:18px">{market.get('vix','?')}</div></div>
+            <div><div style="font-size:10px;color:#64748b;letter-spacing:1px">RISK MULT</div><div style="font-size:18px;color:{'#22c55e' if risk_mult >= 1 else '#fbbf24'}">{risk_mult:.0%}</div></div>
         </div>
 
+        <!-- Market context -->
+        <div style="background:#0f1a2e;border-radius:8px;padding:16px;margin-bottom:16px;border-left:3px solid {regime_color}">
+            <div style="font-size:10px;color:#64748b;letter-spacing:2px;margin-bottom:8px">TODAY'S MARKET CONTEXT</div>
+            <p style="color:#94a3b8;font-size:13px;line-height:1.7;margin:0">
+                Regime: <strong style="color:{regime_color}">{regime}</strong> &nbsp;|&nbsp;
+                Risk env: <strong>{market.get('risk_env','?')}</strong> &nbsp;|&nbsp;
+                Stocks scored: <strong>{report.get('all_scored',0)}</strong> &nbsp;|&nbsp;
+                Dynamic candidates: <strong>{report.get('dynamic_adds',0)}</strong><br>
+                Position sizes adjusted to <strong style="color:#fbbf24">{risk_mult:.0%}</strong> of normal due to current market conditions.
+            </p>
+        </div>
+
+        <!-- Trades -->
         <div style="background:#0f1a2e;border-radius:8px;padding:16px;margin-bottom:16px">
-            <div style="font-size:11px;color:#64748b;letter-spacing:2px;margin-bottom:10px">TRADES EXECUTED</div>
-            <table style="width:100%;border-collapse:collapse">{buy_rows}{sell_rows}</table>
-            {'<p style="color:#475569;font-size:13px">No trades today — no qualifying signals.</p>' if not buy_rows and not sell_rows else ''}
+            <div style="font-size:10px;color:#64748b;letter-spacing:2px;margin-bottom:10px">TRADES EXECUTED TODAY</div>
+            {'<table style="width:100%;border-collapse:collapse">' + buy_rows + sell_rows + '</table>' if buy_rows or sell_rows else ''}
+            {no_trade_reason}
         </div>
 
-        <div style="background:#0f1a2e;border-radius:8px;padding:16px">
-            <div style="font-size:11px;color:#64748b;letter-spacing:2px;margin-bottom:10px">TOP SCORED STOCKS</div>
-            <table style="width:100%;border-collapse:collapse">{stock_rows}</table>
+        <!-- Position reviews -->
+        {'<div style="background:#0f1a2e;border-radius:8px;padding:16px;margin-bottom:16px"><div style="font-size:10px;color:#64748b;letter-spacing:2px;margin-bottom:10px">POSITION REVIEWS (Claude\'s Decisions)</div><table style="width:100%;border-collapse:collapse">' + review_rows + '</table></div>' if review_rows else ''}
+
+        <!-- Top 10 stocks -->
+        <div style="background:#0f1a2e;border-radius:8px;padding:16px;margin-bottom:16px">
+            <div style="font-size:10px;color:#64748b;letter-spacing:2px;margin-bottom:10px">TOP 10 SCORED STOCKS TODAY</div>
+            <table style="width:100%;border-collapse:collapse">
+                <tr style="border-bottom:1px solid #1e293b">
+                    <th style="padding:6px;text-align:left;font-size:10px;color:#475569">TICKER</th>
+                    <th style="padding:6px;text-align:left;font-size:10px;color:#475569">SCORE</th>
+                    <th style="padding:6px;text-align:left;font-size:10px;color:#475569">SIGNAL</th>
+                    <th style="padding:6px;text-align:left;font-size:10px;color:#475569">PROJ 12M</th>
+                    <th style="padding:6px;text-align:left;font-size:10px;color:#475569">AI ANALYSIS</th>
+                </tr>
+                {stock_rows}
+            </table>
         </div>
+
+        {'<div style="background:#0f1a2e;border-radius:8px;padding:16px;margin-bottom:16px"><div style="font-size:10px;color:#64748b;letter-spacing:2px;margin-bottom:10px">SECTOR BREAKDOWN</div><table style="width:100%;border-collapse:collapse">' + sector_rows + '</table></div>' if sector_rows else ''}
+
+        <p style="color:#1e293b;font-size:11px;text-align:center;margin-top:24px">Titan Trader — AI-powered portfolio management</p>
         </body></html>"""
 
     def _build_post_market_html(self, account: Dict, news: Dict, lessons: Dict, perf: Dict) -> str:
