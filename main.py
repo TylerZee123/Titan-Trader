@@ -377,15 +377,16 @@ def _save_current_scores(scored_stocks: list):
         if not supabase_url or not scored_stocks:
             return
         headers = {
-            "apikey": supabase_key,
+            "apikey":        supabase_key,
             "Authorization": f"Bearer {supabase_key}",
-            "Content-Type": "application/json",
-            "Prefer": "resolution=merge-duplicates",
+            "Content-Type":  "application/json",
+            "Prefer":        "resolution=merge-duplicates,return=minimal",
         }
+        today = datetime.now(timezone.utc).date().isoformat()
         records = [
             {
                 "ticker":      s["ticker"],
-                "date":        datetime.now(timezone.utc).date().isoformat(),
+                "date":        today,
                 "total_score": s.get("total_score", 0),
                 "signal":      s.get("signal", ""),
                 "components":  json.dumps(s.get("components", {})),
@@ -393,12 +394,24 @@ def _save_current_scores(scored_stocks: list):
             }
             for s in scored_stocks if s.get("ticker")
         ]
-        requests.post(
-            f"{supabase_url}/rest/v1/daily_scores",
-            headers=headers,
-            json=records,
-            timeout=10,
-        )
+
+        # Send in batches of 20 to avoid timeout on large payloads
+        batch_size = 20
+        saved = 0
+        for i in range(0, len(records), batch_size):
+            batch = records[i:i + batch_size]
+            resp = requests.post(
+                f"{supabase_url}/rest/v1/daily_scores",
+                headers=headers,
+                json=batch,
+                timeout=15,
+            )
+            if resp.ok:
+                saved += len(batch)
+            else:
+                logger.warning(f"  Scores save batch {i//batch_size+1} failed: {resp.status_code} {resp.text[:100]}")
+
+        logger.info(f"  Saved {saved}/{len(records)} scores to Supabase")
     except Exception as e:
         logger.debug(f"Could not save scores: {e}")
 
