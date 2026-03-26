@@ -27,7 +27,7 @@ UNIVERSE: Dict[str, Dict] = {
     "META":  {"bucket": "CORE",     "strategy": "LONG",  "sector": "Technology"},
     "AMZN":  {"bucket": "CORE",     "strategy": "LONG",  "sector": "Consumer Discretionary"},
     "AAPL":  {"bucket": "CORE",     "strategy": "LONG",  "sector": "Technology"},
-    "BRK.B": {"bucket": "CORE",     "strategy": "LONG",  "sector": "Financials"},
+    "BRK-B": {"bucket": "CORE",     "strategy": "LONG",  "sector": "Financials"},
     "LLY":   {"bucket": "CORE",     "strategy": "LONG",  "sector": "Healthcare"},
     "V":     {"bucket": "CORE",     "strategy": "LONG",  "sector": "Financials"},
     "MA":    {"bucket": "CORE",     "strategy": "LONG",  "sector": "Financials"},
@@ -47,7 +47,7 @@ UNIVERSE: Dict[str, Dict] = {
     "ARM":   {"bucket": "MOMENTUM", "strategy": "SWING", "sector": "Technology"},
     "UBER":  {"bucket": "MOMENTUM", "strategy": "SWING", "sector": "Technology"},
     "SHOP":  {"bucket": "MOMENTUM", "strategy": "SWING", "sector": "Technology"},
-    "SQ":    {"bucket": "MOMENTUM", "strategy": "SWING", "sector": "Financials"},
+    "XYZ":   {"bucket": "MOMENTUM", "strategy": "SWING", "sector": "Financials"},
 
     # ── 3. Crypto-Adjacent ────────────────────────────────────────────────
     # High volatility. Smaller position sizes. Momentum-driven.
@@ -76,8 +76,8 @@ UNIVERSE: Dict[str, Dict] = {
     "DIS":   {"bucket": "FALLEN",   "strategy": "SWING", "sector": "Communication Services"},
     "NKE":   {"bucket": "FALLEN",   "strategy": "SWING", "sector": "Consumer Discretionary"},
     "MPW":   {"bucket": "FALLEN",   "strategy": "LONG",  "sector": "Real Estate"},
-    "PARA":  {"bucket": "FALLEN",   "strategy": "SWING", "sector": "Communication Services"},
-    "WBA":   {"bucket": "FALLEN",   "strategy": "SWING", "sector": "Consumer Staples"},
+    "FOXA":  {"bucket": "FALLEN",   "strategy": "SWING", "sector": "Communication Services"},
+    "CVS":   {"bucket": "FALLEN",   "strategy": "SWING", "sector": "Consumer Staples"},
     "PYPL":  {"bucket": "FALLEN",   "strategy": "SWING", "sector": "Financials"},
 
     # ── 6. Dividend / Income / Ballast ────────────────────────────────────
