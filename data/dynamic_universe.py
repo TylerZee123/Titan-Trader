@@ -163,6 +163,9 @@ class DynamicUniverseScanner:
 
         if isinstance(hist.columns, pd.MultiIndex):
             hist.columns = hist.columns.get_level_values(0)
+            hist = hist.loc[:, ~hist.columns.duplicated()]
+            for _col in list(hist.columns):
+                hist[_col] = hist[_col].squeeze()
 
         close      = hist["Close"]
         volume     = hist["Volume"]
@@ -327,6 +330,9 @@ class DynamicUniverseScanner:
             return None
         if isinstance(hist.columns, pd.MultiIndex):
             hist.columns = hist.columns.get_level_values(0)
+            hist = hist.loc[:, ~hist.columns.duplicated()]
+            for _col in list(hist.columns):
+                hist[_col] = hist[_col].squeeze()
 
         close    = hist["Close"]
         ipo_age  = len(hist)  # trading days since IPO (approx)
@@ -402,6 +408,9 @@ class DynamicUniverseScanner:
             return None
         if isinstance(hist.columns, pd.MultiIndex):
             hist.columns = hist.columns.get_level_values(0)
+            hist = hist.loc[:, ~hist.columns.duplicated()]
+            for _col in list(hist.columns):
+                hist[_col] = hist[_col].squeeze()
 
         today_vol  = float(hist["Volume"].iloc[-1])
         avg_vol_5d = float(hist["Volume"].mean())

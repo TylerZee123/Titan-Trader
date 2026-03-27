@@ -109,6 +109,9 @@ class FallenAngelScanner:
             if not hist.empty and len(hist) >= 20:
                 if isinstance(hist.columns, pd.MultiIndex):
                     hist.columns = hist.columns.get_level_values(0)
+                    hist = hist.loc[:, ~hist.columns.duplicated()]
+                    for _col in list(hist.columns):
+                        hist[_col] = hist[_col].squeeze()
                 close  = hist["Close"]
                 ma20   = float(close.rolling(20).mean().iloc[-1])
                 recent = float(close.iloc[-1])

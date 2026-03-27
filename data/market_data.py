@@ -67,9 +67,14 @@ class MarketDataFetcher:
                 logger.warning(f"  {ticker}: insufficient price history")
                 return None
 
-            # Flatten MultiIndex columns if present
+            # Flatten MultiIndex columns (yfinance 1.x returns MultiIndex for single tickers)
             if isinstance(df.columns, pd.MultiIndex):
                 df.columns = df.columns.get_level_values(0)
+            # Deduplicate columns in case flattening creates duplicates
+            df = df.loc[:, ~df.columns.duplicated()]
+            # Squeeze any remaining Series columns (yfinance 1.2.0 compat)
+            for col in list(df.columns):
+                df[col] = df[col].squeeze()
 
             return {
                 "ticker":        ticker,
@@ -103,12 +108,17 @@ class MarketDataFetcher:
                 spy.columns = spy.columns.get_level_values(0)
             if isinstance(vix.columns, pd.MultiIndex):
                 vix.columns = vix.columns.get_level_values(0)
+            spy = spy.loc[:, ~spy.columns.duplicated()]
+            vix = vix.loc[:, ~vix.columns.duplicated()]
 
-            spy_current = float(spy["Close"].iloc[-1])
-            spy_ma50    = float(spy["Close"].tail(50).mean())
-            spy_ma200   = float(spy["Close"].tail(200).mean()) if len(spy) >= 200 else spy_ma50
+            spy_close = spy["Close"].squeeze()
+            vix_close = vix["Close"].squeeze()
 
-            vix_current = float(vix["Close"].iloc[-1]) if not vix.empty else 20.0
+            spy_current = float(spy_close.iloc[-1])
+            spy_ma50    = float(spy_close.tail(50).mean())
+            spy_ma200   = float(spy_close.tail(200).mean()) if len(spy) >= 200 else spy_ma50
+
+            vix_current = float(vix_close.iloc[-1]) if not vix.empty else 20.0
 
             # Market regime
             if spy_current > spy_ma50 > spy_ma200:
@@ -159,10 +169,11 @@ class MarketDataFetcher:
                 df = yf.download(etf, period="3mo", progress=False, auto_adjust=True)
                 if isinstance(df.columns, pd.MultiIndex):
                     df.columns = df.columns.get_level_values(0)
+                df = df.loc[:, ~df.columns.duplicated()]
                 if not df.empty and len(df) >= 22:
-                    momentum_1m = (df["Close"].iloc[-1] / df["Close"].iloc[-22] - 1)
-                    momentum_3m = (df["Close"].iloc[-1] / df["Close"].iloc[0] - 1)
-                    # Combined score
+                    close = df["Close"].squeeze()
+                    momentum_1m = (close.iloc[-1] / close.iloc[-22] - 1)
+                    momentum_3m = (close.iloc[-1] / close.iloc[0] - 1)
                     scores[sector] = round(float(momentum_1m * 0.6 + momentum_3m * 0.4), 4)
             except Exception:
                 scores[sector] = 0.0
