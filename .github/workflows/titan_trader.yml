@@ -35,8 +35,8 @@ jobs:
       - uses: actions/cache@v4
         with:
           path: ~/.cache/pip
-          key: ${{ runner.os }}-pip-v2-${{ hashFiles('requirements.txt') }}
-      - run: pip install -r requirements.txt
+          key: ${{ runner.os }}-pip-v3-${{ hashFiles('requirements.txt') }}
+      - run: pip install --upgrade pip && pip install --upgrade -r requirements.txt
       - name: Pre-Market Scan
         env:
           RUN_MODE:                     pre_market
@@ -75,8 +75,8 @@ jobs:
       - uses: actions/cache@v4
         with:
           path: ~/.cache/pip
-          key: ${{ runner.os }}-pip-v2-${{ hashFiles('requirements.txt') }}
-      - run: pip install -r requirements.txt
+          key: ${{ runner.os }}-pip-v3-${{ hashFiles('requirements.txt') }}
+      - run: pip install --upgrade pip && pip install --upgrade -r requirements.txt
       - uses: actions/download-artifact@v4
         with: { name: pre-market-data, path: /tmp/ }
         continue-on-error: true
@@ -135,8 +135,8 @@ jobs:
       - uses: actions/cache@v4
         with:
           path: ~/.cache/pip
-          key: ${{ runner.os }}-pip-v2-${{ hashFiles('requirements.txt') }}
-      - run: pip install -r requirements.txt
+          key: ${{ runner.os }}-pip-v3-${{ hashFiles('requirements.txt') }}
+      - run: pip install --upgrade pip && pip install --upgrade -r requirements.txt
       - uses: actions/download-artifact@v4
         with: { name: lessons-data, path: learning/ }
         continue-on-error: true
